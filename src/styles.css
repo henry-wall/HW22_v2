@@ -1,0 +1,12 @@
+/* src/styles.css */
+.App {
+  font-family: "Century Gothic", "Arial Narrow", Arial, sans-serif;
+  background-color: #f9f9f9;
+  color: #333;
+  padding: 20px;
+}
+
+body {
+  margin: 0;
+  font-family: "Century Gothic", "Arial Narrow", Arial, sans-serif;
+}

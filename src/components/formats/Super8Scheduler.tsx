@@ -1,7 +1,8 @@
 // Super8Individual.tsx - VERSÃO ATUALIZADA COM NOVO SISTEMA DE PONTUAÇÃO
-import { useSyncedState } from "../../hooks/useSyncedState";
+import { useTournamentState } from "../../hooks/useTournamentState";
 import { useStorage } from "../../services/storage/StorageContext";
-import React, { useState, useEffect } from "react";
+import SyncStatusBadge from "../SyncStatusBadge";
+import { useState, useEffect, useCallback } from "react";
 
 interface Player {
   name: string;
@@ -24,44 +25,90 @@ interface CourtColor {
   border: string;
   text: string;
 }
+
+// Tipo do estado unificado
+interface Super8TournamentData {
+  n: number;
+  players: Player[];
+  matches: Match[];
+  matchResults: Record<string, MatchResult>;
+  wins: number[];
+  losses: number[];
+  scoreDiff: number[];
+  gamesWon: number[];
+  gamesLost: number[];
+  tournamentName: string;
+  durationType: "set6" | "shortset" | "supertie";
+  numCourts: number;
+  viewMode: "planning" | "operation" | "presentation";
+  matchQueue: Match[];
+  inProgressMatches: Record<number, Match>;
+  completedMatches: Match[];
+}
+
+const DEFAULT_S8_DATA: Super8TournamentData = {
+  n: 8,
+  players: Array.from({ length: 8 }, (_, i) => ({ name: String(i + 1) })),
+  matches: [],
+  matchResults: {},
+  wins: [],
+  losses: [],
+  scoreDiff: [],
+  gamesWon: [],
+  gamesLost: [],
+  tournamentName: "Wall BT - Super 8 Individual",
+  durationType: "set6",
+  numCourts: 2,
+  viewMode: "planning",
+  matchQueue: [],
+  inProgressMatches: {},
+  completedMatches: [],
+};
+
 export default function Super8Individual({ storagePrefix = "wallbt_s8" }: { storagePrefix?: string }) {
   const { mode, setMode, isConnected } = useStorage();
 
-  // Valores válidos de N
   const VALID_N = [4, 5, 8, 9, 12, 13, 16];
 
-  // ========== ESTADOS PRINCIPAIS (SINCRONIZADOS) ==========
-  const [n, setN] = useSyncedState<number>(`${storagePrefix}_n`, 8);
-
-  // Default logic moved inline
-  const [players, setPlayers] = useSyncedState<Player[]>(`${storagePrefix}_players`,
-    Array.from({ length: 8 }, (_, i) => ({ name: String(i + 1) }))
+  // ========== ESTADO UNIFICADO DO TORNEIO ==========
+  const { data: tournamentData, updateField, syncStatus, lastSavedAt, isLoaded } = useTournamentState<Super8TournamentData>(
+    `${storagePrefix}_data`,
+    DEFAULT_S8_DATA
   );
 
-  const [matches, setMatches] = useSyncedState<Match[]>(`${storagePrefix}_matches`, []); // Inicialmente vazio, gerado por efeito se necessário
-
-  const [matchResults, setMatchResults] = useSyncedState<Record<string, MatchResult>>(`${storagePrefix}_results`, {});
-
-  const [wins, setWins] = useSyncedState<number[]>(`${storagePrefix}_wins`, []);
-  const [losses, setLosses] = useSyncedState<number[]>(`${storagePrefix}_losses`, []);
-  const [scoreDiff, setScoreDiff] = useSyncedState<number[]>(`${storagePrefix}_diff`, []);
-  const [gamesWon, setGamesWon] = useSyncedState<number[]>(`${storagePrefix}_gamesWon`, []);
-  const [gamesLost, setGamesLost] = useSyncedState<number[]>(`${storagePrefix}_gamesLost`, []);
-
-  const [tournamentName, setTournamentName] = useSyncedState<string>(`${storagePrefix}_name`, "Wall BT - Super 8 Individual");
-
-  const [durationType, setDurationType] = useSyncedState<"set6" | "shortset" | "supertie">(`${storagePrefix}_duration`, "set6");
-
-  const [numCourts, setNumCourts] = useSyncedState<number>(`${storagePrefix}_courts`, 2);
-
-  // ========== ESTADOS PARA MODO OPERAÇÃO (SINCRONIZADOS) ==========
-  const [viewMode, setViewMode] = useSyncedState<"planning" | "operation" | "presentation">(`${storagePrefix}_viewMode`, "planning");
-
-  const [matchQueue, setMatchQueue] = useSyncedState<Match[]>(`${storagePrefix}_queue`, []);
-
-  const [inProgressMatches, setInProgressMatches] = useSyncedState<Record<number, Match>>(`${storagePrefix}_inProgress`, {});
-
-  const [completedMatches, setCompletedMatches] = useSyncedState<Match[]>(`${storagePrefix}_completed`, []);
+  // Aliases para compatibilidade
+  const n = tournamentData.n;
+  const setN = useCallback((v: number) => updateField("n", v), [updateField]);
+  const players = tournamentData.players;
+  const setPlayers = useCallback((v: Player[]) => updateField("players", v), [updateField]);
+  const matches = tournamentData.matches;
+  const setMatches = useCallback((v: Match[]) => updateField("matches", v), [updateField]);
+  const matchResults = tournamentData.matchResults;
+  const setMatchResults = useCallback((v: Record<string, MatchResult>) => updateField("matchResults", v), [updateField]);
+  const wins = tournamentData.wins;
+  const setWins = useCallback((v: number[]) => updateField("wins", v), [updateField]);
+  const losses = tournamentData.losses;
+  const setLosses = useCallback((v: number[]) => updateField("losses", v), [updateField]);
+  const scoreDiff = tournamentData.scoreDiff;
+  const setScoreDiff = useCallback((v: number[]) => updateField("scoreDiff", v), [updateField]);
+  const gamesWon = tournamentData.gamesWon;
+  const setGamesWon = useCallback((v: number[]) => updateField("gamesWon", v), [updateField]);
+  const gamesLost = tournamentData.gamesLost;
+  const setGamesLost = useCallback((v: number[]) => updateField("gamesLost", v), [updateField]);
+  const tournamentName = tournamentData.tournamentName;
+  const setTournamentName = useCallback((v: string) => updateField("tournamentName", v), [updateField]);
+  const durationType = tournamentData.durationType;
+  const setDurationType = useCallback((v: "set6" | "shortset" | "supertie") => updateField("durationType", v), [updateField]);
+  const numCourts = tournamentData.numCourts;
+  const setNumCourts = useCallback((v: number) => updateField("numCourts", v), [updateField]);
+  const viewMode = tournamentData.viewMode;
+  const setViewMode = useCallback((v: "planning" | "operation" | "presentation") => updateField("viewMode", v), [updateField]);
+  const matchQueue = tournamentData.matchQueue;
+  const setMatchQueue = useCallback((v: Match[]) => updateField("matchQueue", v), [updateField]);
+  const inProgressMatches = tournamentData.inProgressMatches;
+  const setInProgressMatches = useCallback((v: Record<number, Match>) => updateField("inProgressMatches", v), [updateField]);
+  const completedMatches = tournamentData.completedMatches;
+  const setCompletedMatches = useCallback((v: Match[]) => updateField("completedMatches", v), [updateField]);
 
   const [editingCompletedMatch, setEditingCompletedMatch] = useState<string | null>(null);
 
@@ -75,7 +122,7 @@ export default function Super8Individual({ storagePrefix = "wallbt_s8" }: { stor
   // ========== ESTADO PARA MODO APRESENTAÇÃO (LOCAL) ==========
   const [presentationView, setPresentationView] = useState<"classification" | "matches">("classification");
 
-  // Removed manual localStorage effects and initializeDefault
+
 
   // Init default matches if empty and format is valid (similar to MixedDoubles logic)
   useEffect(() => {
@@ -129,6 +176,34 @@ export default function Super8Individual({ storagePrefix = "wallbt_s8" }: { stor
   useEffect(() => {
     recomputeStats();
   }, [matchResults, matches, completedMatches]);
+
+
+  function handleGenerateSchedule() {
+    if (matches.length > 0) {
+      if (
+        !window.confirm(
+          "Já existem partidas geradas. Gerar novamente apagará todos os resultados atuais. Deseja continuar?"
+        )
+      ) {
+        return;
+      }
+    }
+
+    const newMatches = generateSchedule(n);
+    if (!newMatches || newMatches.length === 0) {
+      alert("Não foi possível gerar cronograma para este número de jogadores.");
+      return;
+    }
+
+    setMatches(newMatches);
+    setMatchQueue(newMatches);
+    setInProgressMatches({});
+    setCompletedMatches([]);
+    setMatchResults({});
+    setReschedulingMatch(null);
+    setRescheduleTarget(null);
+  }
+
   // ========== GERAÇÃO DE CRONOGRAMA ==========
   function generateSchedule(N: number, courtsOverride?: number): Match[] {
     const activeCourts = courtsOverride || numCourts;
@@ -261,23 +336,19 @@ export default function Super8Individual({ storagePrefix = "wallbt_s8" }: { stor
     setGamesLost(gamesLostArr);
   }
   function handleScoreChange(match: Match, teamKey: string, value: string) {
-    setMatchResults((prev) => {
-      const copy = { ...prev };
-      if (!copy[match.globalId])
-        copy[match.globalId] = { scoreA: "", scoreB: "" };
-      copy[match.globalId] = {
-        ...copy[match.globalId],
-        [teamKey]: value === "" ? "" : Number(value),
-      };
-      return copy;
-    });
+    const copy = { ...matchResults };
+    if (!copy[match.globalId])
+      copy[match.globalId] = { scoreA: "", scoreB: "" };
+    copy[match.globalId] = {
+      ...copy[match.globalId],
+      [teamKey]: value === "" ? "" : Number(value),
+    };
+    setMatchResults(copy);
   }
   function handlePlayerNameChange(index: number, value: string) {
-    setPlayers((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], name: value };
-      return copy;
-    });
+    const copy = [...players];
+    copy[index] = { ...copy[index], name: value };
+    setPlayers(copy);
   }
   // ========== SISTEMA DE DESEMPATE ==========
   function getPlayerTotals() {
@@ -358,19 +429,41 @@ export default function Super8Individual({ storagePrefix = "wallbt_s8" }: { stor
     });
   }
   // ========== FUNÇÕES DE MODO OPERAÇÃO ==========
+  function getBusyPlayers(inProgress: Record<string, Match>): Set<number> {
+    const busy = new Set<number>();
+    Object.values(inProgress).forEach((m) => {
+      m.teamA.forEach((p) => busy.add(p));
+      m.teamB.forEach((p) => busy.add(p));
+    });
+    return busy;
+  }
+
+  function findNextValidMatch(queue: Match[], busyPlayers: Set<number>): number {
+    return queue.findIndex((m) => {
+      const players = [...m.teamA, ...m.teamB];
+      return !players.some((p) => busyPlayers.has(p));
+    });
+  }
+
   function convertMatchesToQueue() {
     return [...matches];
   }
+
   function handleStartOperationMode() {
     const queue = convertMatchesToQueue();
     const initialInProgress: Record<number, Match> = {};
     const remainingQueue = [...queue];
+
     for (let i = 1; i <= numCourts; i++) {
-      if (remainingQueue.length > 0) {
-        const nextMatch = remainingQueue.shift()!;
+      const busy = getBusyPlayers(initialInProgress);
+      const idx = findNextValidMatch(remainingQueue, busy);
+
+      if (idx !== -1) {
+        const nextMatch = remainingQueue.splice(idx, 1)[0];
         initialInProgress[i] = { ...nextMatch, court: i };
       }
     }
+
     setMatchQueue(remainingQueue);
     setInProgressMatches(initialInProgress);
     setCompletedMatches([]);
@@ -379,21 +472,37 @@ export default function Super8Individual({ storagePrefix = "wallbt_s8" }: { stor
   function handleMatchFinish(courtNumber: number) {
     const finishedMatch = inProgressMatches[courtNumber];
     if (!finishedMatch) return;
+
     const result = matchResults[finishedMatch.globalId];
     if (!result || result.scoreA === "" || result.scoreB === "") {
       alert("Por favor, preencha o placar antes de finalizar a partida.");
       return;
     }
-    setCompletedMatches((prev) => [...prev, finishedMatch]);
+
+    // 1. Remove current match matches from inProgress (freeing players)
     const newInProgress = { ...inProgressMatches };
+    delete newInProgress[courtNumber];
+
+    // 2. Add to completed
+    const newCompleted = [...completedMatches, finishedMatch];
+    setCompletedMatches(newCompleted);
+
+    // 3. Try to fill ALL empty courts (including the one just freed)
     const newQueue = [...matchQueue];
 
-    if (newQueue.length > 0) {
-      const nextMatch = newQueue.shift()!;
-      newInProgress[courtNumber] = { ...nextMatch, court: courtNumber };
-    } else {
-      delete newInProgress[courtNumber];
+    // Iterate over all available courts to fill them if possible
+    for (let c = 1; c <= numCourts; c++) {
+      if (!newInProgress[c]) {
+        const busy = getBusyPlayers(newInProgress);
+        const idx = findNextValidMatch(newQueue, busy);
+
+        if (idx !== -1) {
+          const nextMatch = newQueue.splice(idx, 1)[0];
+          newInProgress[c] = { ...nextMatch, court: c };
+        }
+      }
     }
+
     setInProgressMatches(newInProgress);
     setMatchQueue(newQueue);
   }
@@ -408,10 +517,10 @@ export default function Super8Individual({ storagePrefix = "wallbt_s8" }: { stor
     const match = completedMatches.find((m) => m.globalId === globalId);
     if (!match) return;
 
-    setMatchResults((prev) => ({
-      ...prev,
+    setMatchResults({
+      ...matchResults,
       [globalId]: { scoreA: Number(scoreA), scoreB: Number(scoreB) },
-    }));
+    });
     setEditingCompletedMatch(null);
   }
   // ========== FUNÇÕES DE REAGENDAMENTO ==========
@@ -983,6 +1092,28 @@ export default function Super8Individual({ storagePrefix = "wallbt_s8" }: { stor
       </div>
     );
   };
+  // ========== LOADING GATE ==========
+  if (!isLoaded) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", gap: "16px" }}>
+        <div style={{ fontSize: "2rem" }}>⏳</div>
+        <p style={{ fontSize: "1.1rem", color: "#6B7280", fontWeight: 500 }}>Carregando dados do torneio...</p>
+        <SyncStatusBadge status={syncStatus} lastSavedAt={lastSavedAt} />
+      </div>
+    );
+  }
+
+  // ========== LOADING GATE ==========
+  if (!isLoaded) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", gap: "16px" }}>
+        <div style={{ fontSize: "2rem" }}>⏳</div>
+        <p style={{ fontSize: "1.1rem", color: "#6B7280", fontWeight: 500 }}>Carregando dados do torneio...</p>
+        <SyncStatusBadge status={syncStatus} lastSavedAt={lastSavedAt} />
+      </div>
+    );
+  }
+
   // ========== RENDERIZAÇÃO PRINCIPAL ==========
   return (
     <div
@@ -1228,6 +1359,18 @@ export default function Super8Individual({ storagePrefix = "wallbt_s8" }: { stor
                 />
               </div>
             ))}
+            <div className="mt-4 border-t pt-4">
+              <button
+                className="w-full py-3 rounded font-bold text-white transition transform hover:scale-105"
+                style={{
+                  backgroundColor: "#FB0395",
+                  boxShadow: "0 4px 14px 0 rgba(251, 3, 149, 0.39)",
+                }}
+                onClick={handleGenerateSchedule}
+              >
+                📅 Gerar Cronograma
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded p-4 shadow">

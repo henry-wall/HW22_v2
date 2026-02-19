@@ -1,6 +1,7 @@
-import { useSyncedState } from "../../hooks/useSyncedState";
+import { useTournamentState } from "../../hooks/useTournamentState";
 import { useStorage } from "../../services/storage/StorageContext";
-import React, { useEffect, useState } from "react";
+import SyncStatusBadge from "../SyncStatusBadge";
+import { useEffect, useState, useCallback } from "react";
 
 interface Player {
   name: string;
@@ -46,38 +47,67 @@ interface FinalMatch {
   scoreB: string | number;
 }
 
+// Tipo do estado unificado
+interface KingQueenTournamentData {
+  n: number;
+  players: Player[];
+  roundsGroupA: Round[];
+  roundsGroupB: Round[];
+  matchResults: Record<string, MatchResult>;
+  finalMatch: FinalMatch | null;
+  semifinalMatches: SemifinalMatch[];
+  tournamentName: string;
+  tournamentFormat: "single" | "groups";
+  durationType: "set6" | "shortset" | "supertie";
+  numCourts: number;
+}
+
+const DEFAULT_KQ_DATA: KingQueenTournamentData = {
+  n: 8,
+  players: Array.from({ length: 8 }, (_, i) => ({ name: `Jogador ${i + 1}` })),
+  roundsGroupA: [],
+  roundsGroupB: [],
+  matchResults: {},
+  finalMatch: null,
+  semifinalMatches: [],
+  tournamentName: "Rei da Quadra",
+  tournamentFormat: "single",
+  durationType: "set6",
+  numCourts: 2,
+};
+
 export default function KingQueenScheduler({ storagePrefix = "wallbt_kq" }: { storagePrefix?: string }) {
   const { mode, setMode, isConnected } = useStorage();
 
-  // Config (SINCRONIZADA)
-  // Default 8 jogadores (2 quadras)
-  const [n, setN] = useSyncedState<number>(`${storagePrefix}_n`, 8);
-
-  const [players, setPlayers] = useSyncedState<Player[]>(`${storagePrefix}_players`,
-    Array.from({ length: 8 }, (_, i) => ({ name: `Jogador ${i + 1}` }))
+  // ========== ESTADO UNIFICADO DO TORNEIO ==========
+  const { data: tournamentData, updateField, syncStatus, lastSavedAt, isLoaded } = useTournamentState<KingQueenTournamentData>(
+    `${storagePrefix}_data`,
+    DEFAULT_KQ_DATA
   );
 
-  const [roundsGroupA, setRoundsGroupA] = useSyncedState<Round[]>(`${storagePrefix}_roundsA`, []);
-
-  // No Rei da Quadra, geralmente é um grupão ou múltiplos grupos. 
-  // Vamos usar roundsGroupA para tudo ou dividir se for "groups" format.
-  // Para simplificar a lógica requisitada (múltiplos de 4):
-  // Se for "single" (único), vamos tratar como um torneio onde todos jogam as 3 rodadas em seus grupos.
-  const [roundsGroupB, setRoundsGroupB] = useSyncedState<Round[]>(`${storagePrefix}_roundsB`, []); // Usado se tivermos lógica de 2 grupos distintos (ex: A e B fixos)
-
-  const [matchResults, setMatchResults] = useSyncedState<Record<string, MatchResult>>(`${storagePrefix}_results`, {});
-
-  // Manter final/semi como null por enquanto, focar na fase de classificação
-  const [finalMatch, setFinalMatch] = useSyncedState<FinalMatch | null>(`${storagePrefix}_final`, null);
-  const [semifinalMatches, setSemifinalMatches] = useSyncedState<SemifinalMatch[]>(`${storagePrefix}_semis`, []);
-
-  const [tournamentName, setTournamentName] = useSyncedState<string>(`${storagePrefix}_name`, "Rei da Quadra");
-
-  const [tournamentFormat, setTournamentFormat] = useSyncedState<"single" | "groups">(`${storagePrefix}_format`, "single");
-
-  const [durationType, setDurationType] = useSyncedState<"set6" | "shortset" | "supertie">(`${storagePrefix}_duration`, "set6");
-
-  const [numCourts, setNumCourts] = useSyncedState<number>(`${storagePrefix}_courts`, 2);
+  // Aliases para compatibilidade
+  const n = tournamentData.n;
+  const setN = useCallback((v: number) => updateField("n", v), [updateField]);
+  const players = tournamentData.players;
+  const setPlayers = useCallback((v: Player[]) => updateField("players", v), [updateField]);
+  const roundsGroupA = tournamentData.roundsGroupA;
+  const setRoundsGroupA = useCallback((v: Round[]) => updateField("roundsGroupA", v), [updateField]);
+  const roundsGroupB = tournamentData.roundsGroupB;
+  const setRoundsGroupB = useCallback((v: Round[]) => updateField("roundsGroupB", v), [updateField]);
+  const matchResults = tournamentData.matchResults;
+  const setMatchResults = useCallback((v: Record<string, MatchResult>) => updateField("matchResults", v), [updateField]);
+  const finalMatch = tournamentData.finalMatch;
+  const setFinalMatch = useCallback((v: FinalMatch | null) => updateField("finalMatch", v), [updateField]);
+  const semifinalMatches = tournamentData.semifinalMatches;
+  const setSemifinalMatches = useCallback((v: SemifinalMatch[]) => updateField("semifinalMatches", v), [updateField]);
+  const tournamentName = tournamentData.tournamentName;
+  const setTournamentName = useCallback((v: string) => updateField("tournamentName", v), [updateField]);
+  const tournamentFormat = tournamentData.tournamentFormat;
+  const setTournamentFormat = useCallback((v: "single" | "groups") => updateField("tournamentFormat", v), [updateField]);
+  const durationType = tournamentData.durationType;
+  const setDurationType = useCallback((v: "set6" | "shortset" | "supertie") => updateField("durationType", v), [updateField]);
+  const numCourts = tournamentData.numCourts;
+  const setNumCourts = useCallback((v: number) => updateField("numCourts", v), [updateField]);
 
   // Estados derivados (NÃO PERSISTIDOS)
   const [points, setPoints] = useState<number[]>([]);
@@ -94,19 +124,17 @@ export default function KingQueenScheduler({ storagePrefix = "wallbt_kq" }: { st
     { bg: "#FFCBA0", border: "#E0A070", text: "#000" },
   ];
 
-  // NOTA: Efeitos manuais removidos (usePersistedState cuida disso)
+
 
   // Garante array de jogadores correto
   useEffect(() => {
-    setPlayers((prev) => {
-      if (prev.length === n) return prev;
-      const base = Array.from({ length: n }, (_, i) => ({
-        name: `Jogador ${i + 1}`,
-      }));
-      for (let i = 0; i < Math.min(prev.length, base.length); i++)
-        base[i].name = prev[i].name || base[i].name;
-      return base;
-    });
+    if (players.length === n) return;
+    const base = Array.from({ length: n }, (_, i) => ({
+      name: `Jogador ${i + 1}`,
+    }));
+    for (let i = 0; i < Math.min(players.length, base.length); i++)
+      base[i].name = players[i].name || base[i].name;
+    setPlayers(base);
   }, [n]);
 
   useEffect(() => {
@@ -140,6 +168,8 @@ export default function KingQueenScheduler({ storagePrefix = "wallbt_kq" }: { st
     recomputePoints();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchResults, finalMatch, semifinalMatches, roundsGroupA, roundsGroupB]);
+
+
 
   // ---------------- scheduling (Rei da Quadra) ----------------
   // Gera jogos para grupos de 4 jogadores
@@ -394,12 +424,10 @@ export default function KingQueenScheduler({ storagePrefix = "wallbt_kq" }: { st
     prefix = ""
   ) {
     const gid = `${prefix}${match.globalId}`;
-    setMatchResults((prev) => {
-      const copy = { ...prev };
-      if (!copy[gid]) copy[gid] = { scoreA: "", scoreB: "" };
-      copy[gid] = { ...copy[gid], [key]: value === "" ? "" : Number(value) };
-      return copy;
-    });
+    const copy = { ...matchResults };
+    if (!copy[gid]) copy[gid] = { scoreA: "", scoreB: "" };
+    copy[gid] = { ...copy[gid], [key]: value === "" ? "" : Number(value) };
+    setMatchResults(copy);
   }
 
   function handleSemifinalScoreChange(
@@ -407,17 +435,16 @@ export default function KingQueenScheduler({ storagePrefix = "wallbt_kq" }: { st
     key: "scoreA" | "scoreB",
     value: string
   ) {
-    setSemifinalMatches((prev) =>
-      prev.map((s) =>
+    setSemifinalMatches(
+      semifinalMatches.map((s) =>
         s.id === semiId ? { ...s, [key]: value === "" ? "" : Number(value) } : s
       )
     );
   }
 
   function handleFinalScoreChange(key: "scoreA" | "scoreB", value: string) {
-    setFinalMatch((prev) =>
-      prev ? { ...prev, [key]: value === "" ? "" : Number(value) } : prev
-    );
+    if (!finalMatch) return;
+    setFinalMatch({ ...finalMatch, [key]: value === "" ? "" : Number(value) });
   }
 
   function matchLabelSingle(m: Match, offset = 0) {
@@ -592,6 +619,17 @@ export default function KingQueenScheduler({ storagePrefix = "wallbt_kq" }: { st
     (a, b) => b.total - a.total || b.saldo - a.saldo || a.index - b.index
   );
 
+  // ========== LOADING GATE ==========
+  if (!isLoaded) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", gap: "16px" }}>
+        <div style={{ fontSize: "2rem" }}>⏳</div>
+        <p style={{ fontSize: "1.1rem", color: "#6B7280", fontWeight: 500 }}>Carregando dados do torneio...</p>
+        <SyncStatusBadge status={syncStatus} lastSavedAt={lastSavedAt} />
+      </div>
+    );
+  }
+
   // UI render (keeps the same layout)
   return (
     <div
@@ -758,13 +796,11 @@ export default function KingQueenScheduler({ storagePrefix = "wallbt_kq" }: { st
                 <input
                   className="border px-2 py-1 rounded w-full"
                   value={p.name}
-                  onChange={(e) =>
-                    setPlayers((prev) => {
-                      const c = [...prev];
-                      c[i] = { name: e.target.value };
-                      return c;
-                    })
-                  }
+                  onChange={(e) => {
+                    const c = [...players];
+                    c[i] = { name: e.target.value };
+                    setPlayers(c);
+                  }}
                 />
               </div>
             ))}

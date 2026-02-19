@@ -4,11 +4,14 @@ import App from "./App.tsx";
 import "./index.css";
 
 import { StorageProvider } from "./services/storage/StorageContext";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <StorageProvider>
-      <App />
-    </StorageProvider>
+    <ErrorBoundary>
+      <StorageProvider>
+        <App />
+      </StorageProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );

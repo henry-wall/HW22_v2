@@ -1,7 +1,8 @@
 // MixedDoublesScheduler.tsx - VERSÃO SEM QR CODES
-import { useSyncedState } from "../../hooks/useSyncedState";
+import { useTournamentState } from "../../hooks/useTournamentState";
 import { useStorage } from "../../services/storage/StorageContext";
-import React, { useState, useEffect } from "react";
+import SyncStatusBadge from "../SyncStatusBadge";
+import { useState, useEffect, useCallback } from "react";
 
 // Tipos auxiliares
 interface Couple {
@@ -46,46 +47,92 @@ interface FinalMatch {
   scoreB: string | number;
 }
 
+// Tipo do estado unificado do torneio
+interface MixedDoublesTournamentData {
+  n: number;
+  couples: Couple[];
+  roundsGroupA: Round[];
+  roundsGroupB: Round[];
+  matchResults: Record<string, MatchResult>;
+  finalMatch: FinalMatch | null;
+  semifinalMatches: SemifinalMatch[];
+  tournamentName: string;
+  tournamentFormat: "single" | "groups";
+  durationType: "set6" | "shortset" | "supertie";
+  numCourts: number;
+  viewMode: "planning" | "operation" | "presentation";
+  matchQueue: Match[];
+  inProgressMatches: Record<number, Match>;
+  completedMatches: Match[];
+}
+
+const DEFAULT_MD_DATA: MixedDoublesTournamentData = {
+  n: 6,
+  couples: Array.from({ length: 6 }, (_, i) => ({
+    manName: String(i + 1),
+    womanName: String.fromCharCode(65 + i),
+  })),
+  roundsGroupA: [],
+  roundsGroupB: [],
+  matchResults: {},
+  finalMatch: null,
+  semifinalMatches: [],
+  tournamentName: "Wall BT - Troca de Casais",
+  tournamentFormat: "single",
+  durationType: "set6",
+  numCourts: 2,
+  viewMode: "planning",
+  matchQueue: [],
+  inProgressMatches: {},
+  completedMatches: [],
+};
+
 export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: { storagePrefix?: string }) {
-  const { mode, setMode, isConnected } = useStorage();
+  const { mode, setMode, isConnected, migrateLocalToCloud } = useStorage();
 
-  // ========== ESTADOS PRINCIPAIS (SINCRONIZADOS) ==========
-  const [n, setN] = useSyncedState<number>(`${storagePrefix}_n`, 6);
-
-  const [couples, setCouples] = useSyncedState<Couple[]>(`${storagePrefix}_couples`,
-    Array.from({ length: 6 }, (_, i) => ({
-      manName: String(i + 1),
-      womanName: String.fromCharCode(65 + i),
-    }))
+  // ========== ESTADO UNIFICADO DO TORNEIO ==========
+  const { data: tournamentData, updateField, syncStatus, lastSavedAt, isLoaded, errorMessage } = useTournamentState<MixedDoublesTournamentData>(
+    `${storagePrefix}_data`,
+    DEFAULT_MD_DATA
   );
 
-  const [roundsGroupA, setRoundsGroupA] = useSyncedState<Round[]>(`${storagePrefix}_roundsA`, []);
-  const [roundsGroupB, setRoundsGroupB] = useSyncedState<Round[]>(`${storagePrefix}_roundsB`, []);
-
-  const [matchResults, setMatchResults] = useSyncedState<Record<string, MatchResult>>(`${storagePrefix}_results`, {});
-
-  const [finalMatch, setFinalMatch] = useSyncedState<FinalMatch | null>(`${storagePrefix}_final`, null);
-  const [semifinalMatches, setSemifinalMatches] = useSyncedState<SemifinalMatch[]>(`${storagePrefix}_semis`, []);
-
-  const [tournamentName, setTournamentName] = useSyncedState<string>(`${storagePrefix}_name`, "Wall BT - Troca de Casais");
-
-  const [tournamentFormat, setTournamentFormat] = useSyncedState<"single" | "groups">(`${storagePrefix}_format`, "single");
-
-  const [durationType, setDurationType] = useSyncedState<"set6" | "shortset" | "supertie">(`${storagePrefix}_duration`, "set6");
-
-  const [numCourts, setNumCourts] = useSyncedState<number>(`${storagePrefix}_courts`, 2);
-
-  // ========== ESTADOS PARA MODO OPERAÇÃO (SINCRONIZADOS) ==========
-  const [viewMode, setViewMode] = useSyncedState<"planning" | "operation" | "presentation">(`${storagePrefix}_viewMode`, "planning");
-
-  const [matchQueue, setMatchQueue] = useSyncedState<Match[]>(`${storagePrefix}_queue`, []);
-
-  const [inProgressMatches, setInProgressMatches] = useSyncedState<Record<number, Match>>(`${storagePrefix}_inProgress`, {});
-
-  const [completedMatches, setCompletedMatches] = useSyncedState<Match[]>(`${storagePrefix}_completed`, []);
+  // Aliases para compatibilidade com o código existente
+  const n = tournamentData.n;
+  const setN = useCallback((v: number) => updateField("n", v), [updateField]);
+  const couples = tournamentData.couples;
+  const setCouples = useCallback((v: Couple[]) => updateField("couples", v), [updateField]);
+  const roundsGroupA = tournamentData.roundsGroupA;
+  const setRoundsGroupA = useCallback((v: Round[]) => updateField("roundsGroupA", v), [updateField]);
+  const roundsGroupB = tournamentData.roundsGroupB;
+  const setRoundsGroupB = useCallback((v: Round[]) => updateField("roundsGroupB", v), [updateField]);
+  const matchResults = tournamentData.matchResults;
+  const setMatchResults = useCallback((v: Record<string, MatchResult>) => updateField("matchResults", v), [updateField]);
+  const finalMatch = tournamentData.finalMatch;
+  const setFinalMatch = useCallback((v: FinalMatch | null) => updateField("finalMatch", v), [updateField]);
+  const semifinalMatches = tournamentData.semifinalMatches;
+  const setSemifinalMatches = useCallback((v: SemifinalMatch[]) => updateField("semifinalMatches", v), [updateField]);
+  const tournamentName = tournamentData.tournamentName;
+  const setTournamentName = useCallback((v: string) => updateField("tournamentName", v), [updateField]);
+  const tournamentFormat = tournamentData.tournamentFormat;
+  const setTournamentFormat = useCallback((v: "single" | "groups") => updateField("tournamentFormat", v), [updateField]);
+  const durationType = tournamentData.durationType;
+  const setDurationType = useCallback((v: "set6" | "shortset" | "supertie") => updateField("durationType", v), [updateField]);
+  const numCourts = tournamentData.numCourts;
+  const setNumCourts = useCallback((v: number) => updateField("numCourts", v), [updateField]);
+  const viewMode = tournamentData.viewMode;
+  const setViewMode = useCallback((v: "planning" | "operation" | "presentation") => updateField("viewMode", v), [updateField]);
+  const matchQueue = tournamentData.matchQueue;
+  const setMatchQueue = useCallback((v: Match[]) => updateField("matchQueue", v), [updateField]);
+  const inProgressMatches = tournamentData.inProgressMatches;
+  const setInProgressMatches = useCallback((v: Record<number, Match>) => updateField("inProgressMatches", v), [updateField]);
+  const completedMatches = tournamentData.completedMatches;
+  const setCompletedMatches = useCallback((v: Match[]) => updateField("completedMatches", v), [updateField]);
 
   // ========== ESTADOS NÃO PERSISTIDOS (DERIVADOS OU VOLÁTEIS) ==========
   const [scoreDiff, setScoreDiff] = useState<number[]>([]);
+
+  // Estado para alternância de grupos em quadras compartilhadas
+  const [lastSharedGroup, setLastSharedGroup] = useState<"A" | "B">("B");
   const [wins, setWins] = useState<number[]>([]);
   const [losses, setLosses] = useState<number[]>([]);
   const [editingCompletedMatch, setEditingCompletedMatch] = useState<string | null>(null);
@@ -95,7 +142,7 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
   const [gamesLost, setGamesLost] = useState<number[]>([]);
   const [presentationView, setPresentationView] = useState<"classification" | "matches">("classification");
 
-  // NOTA: Os efeitos manuais de localStorage e initializeDefault foram removidos pois usePersistedState cuida disso.
+
 
   // Inicializa o agendamento se estiver vazio (primeira vez)
   useEffect(() => {
@@ -109,22 +156,18 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
     setN(newN);
 
     // Atualizar lista de casais preservando os existentes
-    setCouples(prev => {
-      const newCouples = [...prev];
-      if (newN > prev.length) {
-        // Adicionar novos
-        for (let i = prev.length; i < newN; i++) {
-          newCouples.push({
-            manName: String(i + 1),
-            womanName: String.fromCharCode(65 + i),
-          });
-        }
-      } else if (newN < prev.length) {
-        // Remover excedentes
-        newCouples.splice(newN);
+    const newCouples = [...couples];
+    if (newN > couples.length) {
+      for (let i = couples.length; i < newN; i++) {
+        newCouples.push({
+          manName: String(i + 1),
+          womanName: String.fromCharCode(65 + i),
+        });
       }
-      return newCouples;
-    });
+    } else if (newN < couples.length) {
+      newCouples.splice(newN);
+    }
+    setCouples(newCouples);
 
     // Resetar estados derivados
     resetTournamentStats(newN, tournamentFormat);
@@ -159,6 +202,25 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
   useEffect(() => {
     recomputeStats();
   }, [matchResults, roundsGroupA, roundsGroupB, completedMatches]);
+
+  // Force refresh when coming back to tab/app (mobile wakeup)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && mode === "cloud") {
+        console.log("App visible, refreshing data...");
+        // Hacky way to force re-fetch: mode toggle triggers effect in useTournamentState
+        // Better way would be exposing a 'refresh' method, but for now relies on
+        // the fact that real-time subscription should catch up, or we can trigger a save/load.
+        // Actually, let's just re-mount the component or rely on the hook's internal logic.
+        // For this specific codebase, let's try to reload the page if it's been a while? 
+        // No, that's bad UX. 
+        // limit: we don't have a direct 'refetch' in the hook exposed yet.
+        // Let's just log for now to see if visibility event fires.
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [mode]);
 
   // ========== FUNÇÕES PRINCIPAIS ==========
   function generateSchedule(N: number): Round[] {
@@ -321,15 +383,13 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
     prefix = ""
   ) {
     const gid = `${prefix}${match.globalId}`;
-    setMatchResults((prev) => {
-      const copy = { ...prev };
-      if (!copy[gid]) copy[gid] = { scoreA: "", scoreB: "" };
-      copy[gid] = {
-        ...copy[gid],
-        [teamKey]: value === "" ? "" : Number(value),
-      };
-      return copy;
-    });
+    const copy = { ...matchResults };
+    if (!copy[gid]) copy[gid] = { scoreA: "", scoreB: "" };
+    copy[gid] = {
+      ...copy[gid],
+      [teamKey]: value === "" ? "" : Number(value),
+    };
+    setMatchResults(copy);
   }
 
   function handleCoupleNameChange(
@@ -337,11 +397,9 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
     kind: keyof Couple,
     value: string
   ) {
-    setCouples((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [kind]: value };
-      return copy;
-    });
+    const copy = [...couples];
+    copy[index] = { ...copy[index], [kind]: value };
+    setCouples(copy);
   }
 
   // ========== SISTEMA DE DESEMPATE SIMPLIFICADO ==========
@@ -430,15 +488,107 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
     return allMatches;
   }
 
+  function getBusyPlayers(inProgress: Record<string, Match>): Set<string> {
+    const busy = new Set<string>();
+    Object.values(inProgress).forEach((m) => {
+      if (!m || !m.teamA) return; // Defensive check
+      const group = m.group || "A";
+      busy.add(`${group}_m_${m.teamA.man}`);
+      busy.add(`${group}_w_${m.teamA.woman}`);
+      if (m.teamB) {
+        busy.add(`${group}_m_${m.teamB.man}`);
+        busy.add(`${group}_w_${m.teamB.woman}`);
+      }
+    });
+    return busy;
+  }
+
+  function getCourtAssignment(court: number, totalCourts: number, format: string): "A" | "B" | "ANY" {
+    if (format !== "groups") return "ANY";
+    const half = Math.floor(totalCourts / 2);
+    if (half === 0) return "ANY"; // Apenas 1 quadra
+
+    if (court <= half) return "A";
+    if (court <= 2 * half) return "B";
+    return "ANY"; // Quadras excedentes (ímpar)
+  }
+
+  function findNextValidMatch(
+    queue: Match[],
+    busyPlayers: Set<string>,
+    targetGroup?: "A" | "B"
+  ): number {
+    return queue.findIndex((m) => {
+      const group = m.group || "A";
+      if (targetGroup && group !== targetGroup) return false;
+
+      const p1 = `${group}_m_${m.teamA.man}`;
+      const p2 = `${group}_w_${m.teamA.woman}`;
+      if (busyPlayers.has(p1) || busyPlayers.has(p2)) return false;
+
+      if (m.teamB) {
+        const p3 = `${group}_m_${m.teamB.man}`;
+        const p4 = `${group}_w_${m.teamB.woman}`;
+        if (busyPlayers.has(p3) || busyPlayers.has(p4)) return false;
+      }
+      return true;
+    });
+  }
+
   function handleStartOperationMode() {
     const queue = convertRoundsToQueue();
     const initialInProgress: Record<number, Match> = {};
     const remainingQueue = [...queue];
+    let currentSharedGroup: "A" | "B" = "A"; // Começa com A nas quadras compartilhadas
 
     for (let i = 1; i <= numCourts; i++) {
-      if (remainingQueue.length > 0) {
-        const nextMatch = remainingQueue.shift()!;
+      const assignment = getCourtAssignment(i, numCourts, tournamentFormat);
+      const busy = getBusyPlayers(initialInProgress);
+
+      let targetGroup: "A" | "B" | undefined;
+      if (assignment !== "ANY") {
+        targetGroup = assignment;
+      } else {
+        targetGroup = currentSharedGroup;
+      }
+
+      let idx = findNextValidMatch(remainingQueue, busy, targetGroup);
+
+      // Fallback: 
+      // 1. Se for quadra compartilhada (ANY), tenta o outro grupo se o primeiro falhar/estiver ocupado.
+      // 2. Se for quadra dedicada (A ou B), SÓ tenta o outro grupo se não houver mais partidas do grupo dono na fila (esgotado).
+      if (idx === -1) {
+        let shouldTryOther = false;
+        if (assignment === "ANY") {
+          shouldTryOther = true;
+        } else {
+          // Só libera quadra dedicada se o grupo dela ACABOU
+          const hasMatchesForTarget = remainingQueue.some(m => (m.group || "A") === targetGroup);
+          if (!hasMatchesForTarget) {
+            shouldTryOther = true;
+          }
+        }
+
+        if (shouldTryOther) {
+          const otherGroup = targetGroup === "A" ? "B" : "A";
+          const idxOther = findNextValidMatch(remainingQueue, busy, otherGroup);
+          if (idxOther !== -1) {
+            idx = idxOther;
+            if (assignment === "ANY") currentSharedGroup = otherGroup;
+          }
+        }
+      }
+
+      if (idx !== -1) {
+        const nextMatch = remainingQueue.splice(idx, 1)[0];
         initialInProgress[i] = { ...nextMatch, court: i };
+
+        // Se usou quadra compartilhada, alterna para a próxima
+        if (assignment === "ANY") {
+          const usedGroup = (nextMatch.group || "A") as "A" | "B";
+          setLastSharedGroup(usedGroup);
+          currentSharedGroup = usedGroup === "A" ? "B" : "A";
+        }
       }
     }
 
@@ -448,29 +598,116 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
     setViewMode("operation");
   }
 
-  function handleMatchFinish(courtNumber: number) {
-    const finishedMatch = inProgressMatches[courtNumber];
-    if (!finishedMatch) return;
+  function handleMatchFinish(match: Match) {
+    // Ensure numeric key from the match object
+    const cKey = Number(match.court);
 
+    // Validation: Check score for THIS specific match
     const prefix =
-      tournamentFormat === "groups" && finishedMatch.group === "B"
+      tournamentFormat === "groups" && match.group === "B"
         ? "B_"
         : "A_";
-    const result = matchResults[`${prefix}${finishedMatch.globalId}`];
+    const result = matchResults[`${prefix}${match.globalId}`];
+
     if (!result || result.scoreA === "" || result.scoreB === "") {
       alert("Por favor, preencha o placar antes de finalizar a partida.");
       return;
     }
 
-    setCompletedMatches((prev) => [...prev, finishedMatch]);
-    const newInProgress = { ...inProgressMatches };
-    const newQueue = [...matchQueue];
+    // 1. Remove ALL matches associated with this court (fixes ghost/duplicate bugs)
+    // We iterate through all keys to find any match that claims to be on this court
+    const newInProgress: Record<number, Match> = { ...inProgressMatches };
 
-    if (newQueue.length > 0) {
-      const nextMatch = newQueue.shift()!;
-      newInProgress[courtNumber] = { ...nextMatch, court: courtNumber };
-    } else {
-      delete newInProgress[courtNumber];
+    Object.keys(newInProgress).forEach((k) => {
+      const key = Number(k);
+      const m = newInProgress[key];
+      // Fix: Check if match exists and if it matches the court of the finished match
+      if (m && Number(m.court) === cKey) {
+        delete newInProgress[key];
+      }
+    });
+
+    // 2. Add to completed (Deduplicate)
+    // Check if globalId already exists in completed matches to avoid spam
+    const alreadyCompleted = completedMatches.some(m => m.globalId === match.globalId);
+    let newCompleted = completedMatches;
+    if (!alreadyCompleted) {
+      newCompleted = [...completedMatches, match];
+      setCompletedMatches(newCompleted);
+    }
+
+    // 3. Try to fill ALL empty courts (including the one just freed)
+    // CRITICAL FIX: Sanitize Queue to prevent "Zombie Matches" (duplicates with same ID) from returning
+    let newQueue = matchQueue.filter(
+      (m) =>
+        m.globalId !== match.globalId && // Remove current match from queue if present
+        !Object.values(newInProgress).some(ip => ip.globalId === m.globalId) && // Remove if already in progress
+        !completedMatches.some(cm => cm.globalId === m.globalId) // Remove if already completed
+    );
+
+    try {
+      let updatedLastShared = lastSharedGroup;
+      // Iterate over all available courts to fill them if possible
+      for (let c = 1; c <= numCourts; c++) {
+        if (!newInProgress[c]) {
+          const assignment = getCourtAssignment(c, numCourts, tournamentFormat);
+          const busy = getBusyPlayers(newInProgress);
+
+          let targetGroup: "A" | "B" | undefined;
+          if (assignment !== "ANY") {
+            targetGroup = assignment;
+          } else {
+            // Nas compartilhadas, tenta alternar
+            targetGroup = updatedLastShared === "A" ? "B" : "A";
+          }
+
+          let idx = findNextValidMatch(newQueue, busy, targetGroup);
+
+          // Fallback: 
+          // 1. Se for quadra compartilhada (ANY), tenta o outro grupo se o primeiro falhar/estiver ocupado.
+          // 2. Se for quadra dedicada (A ou B), SÓ tenta o outro grupo se não houver mais partidas do grupo dono na fila (esgotado).
+          if (idx === -1) {
+            let shouldTryOther = false;
+            if (assignment === "ANY") {
+              shouldTryOther = true;
+            } else {
+              // Só libera quadra dedicada se o grupo dela ACABOU
+              // Check queue for target group matches
+              const hasMatchesForTarget = newQueue.some(m => (m.group || "A") === targetGroup);
+              if (!hasMatchesForTarget) {
+                shouldTryOther = true;
+              }
+            }
+
+            if (shouldTryOther) {
+              const otherGroup = targetGroup === "A" ? "B" : "A";
+              idx = findNextValidMatch(newQueue, busy, otherGroup);
+            }
+          }
+
+          if (idx !== -1) {
+            const nextMatch = newQueue[idx];
+            // Double check against newInProgress just in case loop added it
+            const isAlreadyInProgress = Object.values(newInProgress).some(m => m.globalId === nextMatch.globalId);
+
+            if (!isAlreadyInProgress) {
+              newQueue.splice(idx, 1);
+              newInProgress[c] = { ...nextMatch, court: c };
+
+              if (assignment === "ANY") {
+                const usedGroup = (nextMatch.group || "A") as "A" | "B";
+                updatedLastShared = usedGroup;
+                setLastSharedGroup(usedGroup);
+              }
+            } else {
+              newQueue.splice(idx, 1);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao preencher quadras:", error);
+      // Mesmo com erro, SALVAMOS o estado limpo (sem a partida finalizada) para não travar o painel
     }
 
     setInProgressMatches(newInProgress);
@@ -491,13 +728,13 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
 
     const prefix =
       tournamentFormat === "groups" && match.group === "B" ? "B_" : "A_";
-    setMatchResults((prev) => ({
-      ...prev,
+    setMatchResults({
+      ...matchResults,
       [`${prefix}${globalId}`]: {
         scoreA: Number(scoreA),
         scoreB: Number(scoreB),
       },
-    }));
+    });
     setEditingCompletedMatch(null);
   }
 
@@ -939,8 +1176,8 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
     key: string,
     value: string
   ) {
-    setSemifinalMatches((prev) =>
-      prev.map((semi) =>
+    setSemifinalMatches(
+      semifinalMatches.map((semi) =>
         semi.id === semiId
           ? { ...semi, [key]: value === "" ? "" : Number(value) }
           : semi
@@ -971,12 +1208,10 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
   }
 
   function handleFinalScoreChange(key: string, value: string) {
-    setFinalMatch((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        [key]: value === "" ? "" : Number(value),
-      };
+    if (!finalMatch) return;
+    setFinalMatch({
+      ...finalMatch,
+      [key]: value === "" ? "" : Number(value),
     });
   }
 
@@ -1533,6 +1768,17 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
     );
   };
 
+  // ========== LOADING GATE ==========
+  if (!isLoaded) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", gap: "16px" }}>
+        <div style={{ fontSize: "2rem" }}>⏳</div>
+        <p style={{ fontSize: "1.1rem", color: "#6B7280", fontWeight: 500 }}>Carregando dados do torneio...</p>
+        <SyncStatusBadge status={syncStatus} lastSavedAt={lastSavedAt} />
+      </div>
+    );
+  }
+
   // ========== RENDERIZAÇÃO PRINCIPAL ==========
   return (
     <div
@@ -1560,10 +1806,25 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
           </button>
           {mode === "cloud" && (
             <span className="text-xs text-gray-500">
-              {isConnected ? "🟢 Conectado" : "⚪ Aguardando id..."}
+              {isConnected ? "🟢 Conectado" : "⚪ Conectando..."}
             </span>
           )}
         </div>
+
+        {errorMessage && mode === "cloud" && (
+          <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200 max-w-xs text-center">
+            ⚠️ {errorMessage}
+          </div>
+        )}
+
+        {mode === "cloud" && !errorMessage && (
+          <button
+            onClick={migrateLocalToCloud}
+            className="mt-2 text-xs text-blue-600 underline hover:text-blue-800"
+          >
+            📤 Migrar dados locais para a nuvem
+          </button>
+        )}
       </div>
 
       <h1
@@ -1986,13 +2247,11 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
                 ? "Criar Semifinais"
                 : "Criar Final"}
             </button>
-            {tournamentFormat === "groups" && semifinalMatches.length > 0 && (
+            {semifinalMatches.length > 0 && !finalMatch && (
               <button
-                className="mt-2 ml-2 px-3 py-1 rounded transition"
+                className="w-full mt-4 bg-[#FB0395] hover:bg-pink-700 text-white font-bold py-3 px-4 rounded shadow transition"
                 style={{
-                  backgroundColor: "#FB0395",
-                  color: "white",
-                  fontWeight: "bold",
+                  boxShadow: "0 0 15px rgba(251, 3, 149, 0.5)",
                 }}
                 onClick={generateFinalFromSemifinals}
               >
@@ -2005,7 +2264,7 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
         // ========== MODO OPERAÇÃO ==========
         <div className="mt-8">
           <h2
-            className="text-2xl font-bold text-center mb-4"
+            className="text-3xl font-bold mb-6 text-center"
             style={{ color: "#FB0395" }}
           >
             Painel do Torneio
@@ -2096,7 +2355,7 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
                       />
                       <button
                         className="px-3 py-1 text-sm font-bold rounded bg-green-500 hover:bg-green-600 text-white transition-colors"
-                        onClick={() => handleMatchFinish(match.court!)}
+                        onClick={() => handleMatchFinish(match)}
                         title="Finalizar Partida"
                       >
                         ✓

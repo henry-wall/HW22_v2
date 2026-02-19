@@ -1,5 +1,5 @@
 // TournamentManager.tsx
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import MixedDoublesScheduler from "./MixedDoublesScheduler";
 
 interface TournamentTab {
@@ -11,8 +11,8 @@ interface TournamentTab {
 export default function TournamentManager() {
   const [tabs, setTabs] = useState<TournamentTab[]>(() => {
     const saved = localStorage.getItem("tournamentTabs");
-    return saved 
-      ? JSON.parse(saved) 
+    return saved
+      ? JSON.parse(saved)
       : [{ id: "tab-1", name: "Torneio 1", active: true }];
   });
 
@@ -60,7 +60,7 @@ export default function TournamentManager() {
         <h1 className="text-2xl font-bold" style={{ color: "#FB0395", fontFamily: "'Century Gothic', 'Arial Narrow', Arial, sans-serif" }}>
           Gerenciador de Torneios
         </h1>
-        <button 
+        <button
           onClick={addTab}
           className="px-4 py-2 bg-green-500 text-white rounded font-bold"
           style={{ fontFamily: "'Century Gothic', 'Arial Narrow', Arial, sans-serif" }}
@@ -103,7 +103,7 @@ export default function TournamentManager() {
           />
         </div>
         <div className="p-4">
-          <MixedDoublesScheduler 
+          <MixedDoublesScheduler
             key={activeTab.id}
             storagePrefix={`mixedDoublesData_${activeTab.id}`}
           />

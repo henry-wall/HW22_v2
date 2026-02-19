@@ -21,45 +21,41 @@ export class SupabaseService implements StorageService {
     async load<T>(key: string, defaultValue: T): Promise<T> {
         if (!this.isConfigured || !this.client) return defaultValue;
 
-        try {
-            const { data, error } = await this.client
-                .from("key_value_store")
-                .select("value")
-                .eq("key", key)
-                .single();
+        const { data, error } = await this.client
+            .from("key_value_store")
+            .select("value")
+            .eq("key", key)
+            .single();
 
-            if (error) {
-                // If row doesn't exist, return default
-                if (error.code === "PGRST116") return defaultValue;
-                console.error("Supabase load error:", error);
-                return defaultValue;
-            }
+        if (error) {
+            // If row doesn't exist, return default. This is NOT an error.
+            if (error.code === "PGRST116") return defaultValue;
 
-            return data?.value ?? defaultValue;
-        } catch (err) {
-            console.error("Unexpected Supabase load error:", err);
-            return defaultValue;
+            // For other errors (network, auth, etc), THROW so the hook knows it failed
+            console.error("Supabase load error:", error);
+            throw new Error(error.message);
         }
+
+        return data?.value ?? defaultValue;
     }
 
     async save<T>(key: string, value: T): Promise<void> {
         if (!this.isConfigured || !this.client) return;
 
-        try {
-            const { error } = await this.client
-                .from("key_value_store")
-                .upsert({ key, value }, { onConflict: "key" });
+        const { error } = await this.client
+            .from("key_value_store")
+            .upsert({ key, value }, { onConflict: "key" });
 
-            if (error) {
-                console.error("Supabase save error:", error);
-            }
-        } catch (err) {
-            console.error("Unexpected Supabase save error:", err);
+        if (error) {
+            console.error("Supabase save error:", error);
+            throw new Error(error.message);
         }
     }
 
     subscribe<T>(key: string, callback: (newValue: T) => void): () => void {
         if (!this.isConfigured || !this.client) return () => { };
+
+        console.log(`[SupabaseService] Subscribing to key: ${key}`);
 
         const channel = this.client
             .channel(`public:key_value_store:key=eq.${key}`)
@@ -69,10 +65,11 @@ export class SupabaseService implements StorageService {
                     event: "UPDATE",
                     schema: "public",
                     table: "key_value_store",
-                    filter: `key=eq.${key}`,
+                    // filter: `key=eq.${key}`,
                 },
                 (payload) => {
-                    if (payload.new && payload.new.value) {
+                    console.log(`[SupabaseService] Received UPDATE for ${key}`, payload);
+                    if (payload.new && payload.new.key === key && payload.new.value) {
                         callback(payload.new.value as T);
                     }
                 }
@@ -83,17 +80,24 @@ export class SupabaseService implements StorageService {
                     event: "INSERT",
                     schema: "public",
                     table: "key_value_store",
-                    filter: `key=eq.${key}`,
+                    // filter: `key=eq.${key}`, // Removing filter to debug
                 },
                 (payload) => {
-                    if (payload.new && payload.new.value) {
+                    console.log(`[SupabaseService] Received INSERT for ${key}`, payload);
+                    if (payload.new && payload.new.key === key && payload.new.value) {
                         callback(payload.new.value as T);
                     }
                 }
             )
-            .subscribe();
+            .subscribe((status, err) => {
+                console.log(`[SupabaseService] Subscription status for ${key}:`, status);
+                if (err) {
+                    console.error(`[SupabaseService] Subscription error for ${key}:`, err);
+                }
+            });
 
         return () => {
+            console.log(`[SupabaseService] Unsubscribing from ${key}`);
             this.client?.removeChannel(channel);
         };
     }

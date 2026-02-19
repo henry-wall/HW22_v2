@@ -1,7 +1,8 @@
 // src/components/formats/TournamentSelector.tsx
-import React, { useState, useEffect } from "react";
-import { useSyncedState } from "../../hooks/useSyncedState";
+import { useState, useEffect } from "react";
+import { useTournamentState } from "../../hooks/useTournamentState";
 import { useStorage } from "../../services/storage/StorageContext";
+import SyncStatusBadge from "../SyncStatusBadge";
 import MixedDoublesScheduler from "./MixedDoublesScheduler";
 import KingQueenScheduler from "./KingQueenScheduler";
 import Super8Scheduler from "./Super8Scheduler";
@@ -23,10 +24,12 @@ interface TournamentTab {
 export default function TournamentSelector() {
   const { migrateLocalToCloud } = useStorage();
 
-  // Usar useSyncedState para sincronizar a lista de abas entre dispositivos
-  const [tabs, setTabs] = useSyncedState<TournamentTab[]>("wallbt_global_tabs", [
-    { id: "tab-1", name: "Torneio 1", format: "mixed-doubles" as TournamentFormat, active: true }
-  ]);
+  const { data: tabsData, updateField: updateTabsField, syncStatus: tabsSyncStatus, lastSavedAt: tabsLastSavedAt } = useTournamentState<{ tabs: TournamentTab[] }>(
+    "wallbt_global_tabs_v2",
+    { tabs: [{ id: "tab-1", name: "Torneio 1", format: "mixed-doubles" as TournamentFormat, active: true }] }
+  );
+  const tabs = tabsData.tabs;
+  const setTabs = (newTabs: TournamentTab[]) => updateTabsField("tabs", newTabs);
 
   // Migrar dados antigos (se houver) para a nova chave sincronizada apenas uma vez
   useEffect(() => {
@@ -73,6 +76,10 @@ export default function TournamentSelector() {
   const updateTabName = (id: string, name: string) => {
     setTabs(tabs.map(tab => tab.id === id ? { ...tab, name } : tab));
   };
+
+  if (!tabs || !Array.isArray(tabs) || tabs.length === 0) {
+    return <div className="p-8 text-center">Carregando abas...</div>;
+  }
 
   const activeTab = tabs.find(tab => tab.active) || tabs[0];
 
@@ -228,6 +235,7 @@ export default function TournamentSelector() {
             📱 Acessar do Celular / Compartilhar
           </button>
         </div>
+        <SyncStatusBadge status={tabsSyncStatus} lastSavedAt={tabsLastSavedAt} />
 
         <div className="flex gap-2">
           <button

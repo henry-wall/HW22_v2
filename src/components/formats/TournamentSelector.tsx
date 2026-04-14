@@ -170,7 +170,7 @@ export default function TournamentSelector() {
   const currentUrl = window.location.href;
 
   return (
-    <div className="p-4 max-w-7xl mx-auto">
+    <div className="px-1 py-4 sm:p-4 max-w-7xl mx-auto">
       {/* Modal de Compartilhamento */}
       {showShareModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -290,8 +290,8 @@ export default function TournamentSelector() {
       </div>
 
       {/* Torneio Ativo */}
-      <div className="border rounded">
-        <div className="bg-slate-100 p-2">
+      <div className="border-t sm:border sm:rounded shadow-sm overflow-hidden">
+        <div className="bg-slate-100 p-2 border-b sm:border-b-0">
           <input
             type="text"
             value={activeTab.name}
@@ -300,7 +300,7 @@ export default function TournamentSelector() {
             style={{ fontFamily: "'Century Gothic', 'Arial Narrow', Arial, sans-serif" }}
           />
         </div>
-        <div className="p-4">
+        <div className="px-0 py-4 sm:p-4">
           {renderActiveTournament()}
         </div>
       </div>

@@ -91,7 +91,7 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
   const { mode, setMode, isConnected, migrateLocalToCloud } = useStorage();
 
   // ========== ESTADO UNIFICADO DO TORNEIO ==========
-  const { data: tournamentData, updateField, syncStatus, lastSavedAt, isLoaded, errorMessage } = useTournamentState<MixedDoublesTournamentData>(
+  const { data: tournamentData, updateField, updateData, syncStatus, lastSavedAt, isLoaded, errorMessage } = useTournamentState<MixedDoublesTournamentData>(
     `${storagePrefix}_data`,
     DEFAULT_MD_DATA
   );
@@ -130,6 +130,7 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
 
   // ========== ESTADOS NÃO PERSISTIDOS (DERIVADOS OU VOLÁTEIS) ==========
   const [scoreDiff, setScoreDiff] = useState<number[]>([]);
+  const [shuffleBeforeGenerating, setShuffleBeforeGenerating] = useState(false);
 
   // Estado para alternância de grupos em quadras compartilhadas
   const [lastSharedGroup, setLastSharedGroup] = useState<"A" | "B">("B");
@@ -223,6 +224,15 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
   }, [mode]);
 
   // ========== FUNÇÕES PRINCIPAIS ==========
+  function shuffleArray<T>(array: T[]): T[] {
+    const newArr = [...array];
+    for (let i = newArr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+    }
+    return newArr;
+  }
+
   function generateSchedule(N: number): Round[] {
     if (N < 2) return [];
     const R = N % 2 === 0 ? N - 1 : N;
@@ -456,6 +466,10 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
   }
 
   function handleGenerate() {
+    if (shuffleBeforeGenerating) {
+      setCouples(shuffleArray(couples));
+    }
+
     if (tournamentFormat === "single") {
       setRoundsGroupA(generateSchedule(n));
       setRoundsGroupB([]);
@@ -633,7 +647,6 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
     let newCompleted = completedMatches;
     if (!alreadyCompleted) {
       newCompleted = [...completedMatches, match];
-      setCompletedMatches(newCompleted);
     }
 
     // 3. Try to fill ALL empty courts (including the one just freed)
@@ -710,8 +723,11 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
       // Mesmo com erro, SALVAMOS o estado limpo (sem a partida finalizada) para não travar o painel
     }
 
-    setInProgressMatches(newInProgress);
-    setMatchQueue(newQueue);
+    updateData({
+      inProgressMatches: newInProgress,
+      matchQueue: newQueue,
+      completedMatches: newCompleted
+    });
   }
 
   function handleEditCompletedMatch(globalId: string) {
@@ -1788,202 +1804,215 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
       }}
     >
 
-      <div className="mb-4 flex flex-col items-center justify-center">
-        <img
-          src="https://i.imgur.com/sQWqNap.png"
-          alt="Logomarca Wall BT"
-          className="h-24 object-contain mb-2"
-        />
-        <div className="flex gap-2 items-center text-sm">
-          <button
-            onClick={() => setMode(mode === "local" ? "cloud" : "local")}
-            className={`px-3 py-1 rounded border ${mode === "cloud"
-              ? "bg-blue-600 text-white border-blue-700"
-              : "bg-gray-200 text-gray-700 border-gray-300"
-              }`}
-          >
-            {mode === "cloud" ? "☁️ Nuvem Ativa" : "💻 Modo Local"}
-          </button>
-          {mode === "cloud" && (
-            <span className="text-xs text-gray-500">
-              {isConnected ? "🟢 Conectado" : "⚪ Conectando..."}
-            </span>
-          )}
-        </div>
-
-        {errorMessage && mode === "cloud" && (
-          <div className="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded border border-red-200 max-w-xs text-center">
-            ⚠️ {errorMessage}
-          </div>
-        )}
-
-        {mode === "cloud" && !errorMessage && (
-          <button
-            onClick={migrateLocalToCloud}
-            className="mt-2 text-xs text-blue-600 underline hover:text-blue-800"
-          >
-            📤 Migrar dados locais para a nuvem
-          </button>
-        )}
-      </div>
-
-      <h1
-        className="text-2xl font-bold mb-4 text-center"
-        style={{ color: "#FB0395" }}
-      >
-        {tournamentName}
-      </h1>
-
-      {/* CONTROLES PRINCIPAIS */}
+      {/* ===== CABEÇALHO MODERNO ===== */}
       {viewMode !== "presentation" && (
-        <div className="bg-slate-50 p-4 rounded-lg shadow mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block mb-2">Nome do Torneio:</label>
-              <input
-                className="border px-2 py-1 rounded w-full"
-                value={tournamentName}
-                onChange={(e) => setTournamentName(e.target.value)}
+        <div className="mb-4 rounded-2xl overflow-hidden shadow-md border border-gray-100">
+          {/* ── Barra superior: logo + nome + nuvem ── */}
+          <div className="flex flex-col sm:flex-row items-stretch">
+            {/* Coluna da logo com gradiente */}
+            <div
+              className="flex items-center justify-center px-6 py-4 shrink-0"
+              style={{
+                background: "linear-gradient(135deg, #1a0a2e 0%, #3b0a6e 50%, #6b1a9e 100%)",
+                minWidth: 140,
+              }}
+            >
+              <img
+                src="https://i.imgur.com/sQWqNap.png"
+                alt="Logomarca Wall BT"
+                className="h-20 object-contain"
               />
             </div>
-            <div>
-              <label className="block mb-2">Formato do Torneio:</label>
-              <div className="flex gap-2">
-                <label>
-                  <input
-                    type="radio"
-                    name="format"
-                    value="single"
-                    checked={tournamentFormat === "single"}
-                    onChange={() => handleFormatChange("single")}
-                    className="mr-1"
-                  />
-                  Único (4–16)
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="format"
-                    value="groups"
-                    checked={tournamentFormat === "groups"}
-                    onChange={() => handleFormatChange("groups")}
-                    className="mr-1"
-                  />
-                  Grupos (4–16)
-                </label>
+
+            {/* Coluna direita: nome + controles de nuvem */}
+            <div className="flex-1 bg-white px-5 py-3 flex flex-col justify-center gap-1.5">
+              <h1
+                className="text-2xl font-black leading-tight"
+                style={{ color: "#FB0395", fontFamily: "'Century Gothic', 'Arial Narrow', Arial, sans-serif" }}
+              >
+                {tournamentName || "Torneio"}
+              </h1>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setMode(mode === "local" ? "cloud" : "local")}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${mode === "cloud"
+                    ? "bg-blue-600 text-white border-blue-700"
+                    : "bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200"
+                    }`}
+                >
+                  {mode === "cloud" ? "☁️ Nuvem Ativa" : "💻 Modo Local"}
+                </button>
+                {mode === "cloud" && (
+                  <span className={`text-xs font-semibold ${isConnected ? "text-green-600" : "text-gray-400"}`}>
+                    {isConnected ? "🟢 Conectado" : "⚪ Conectando..."}
+                  </span>
+                )}
+                {mode === "cloud" && !errorMessage && (
+                  <button
+                    onClick={migrateLocalToCloud}
+                    className="text-xs text-blue-500 underline hover:text-blue-700"
+                  >
+                    📤 Migrar dados locais
+                  </button>
+                )}
+                {errorMessage && mode === "cloud" && (
+                  <span className="text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                    ⚠️ {errorMessage}
+                  </span>
+                )}
               </div>
             </div>
-            <div>
-              <label className="block mb-2">Número de Casais:</label>
-              <select
-                className="border px-2 py-1 rounded w-full"
-                value={n}
-                onChange={(e) => handleCoupleCountChange(Number(e.target.value))}
-              >
-                {Array.from({ length: 13 }, (_, i) => i + 4).map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
-                ))}
-              </select>
+          </div>
+
+          {/* ── Corpo: campos do formulário ── */}
+          <div className="bg-gray-50 border-t border-gray-100 px-4 py-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
+              {/* Nome */}
+              <div className="col-span-2 sm:col-span-1 lg:col-span-2">
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Nome do Torneio</label>
+                <input
+                  className="border border-gray-200 bg-white px-3 py-1.5 rounded-lg w-full focus:ring-2 focus:ring-pink-400 focus:border-transparent outline-none text-sm h-9 shadow-sm"
+                  value={tournamentName}
+                  onChange={(e) => setTournamentName(e.target.value)}
+                  placeholder="Ex: Torneio de Verão"
+                />
+              </div>
+
+              {/* Formato torneio */}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Formato</label>
+                <div className="flex bg-white border border-gray-200 rounded-lg h-9 overflow-hidden shadow-sm">
+                  <label className={`flex-1 flex items-center justify-center cursor-pointer text-xs font-semibold transition-colors ${tournamentFormat === "single" ? "bg-pink-500 text-white" : "text-gray-500 hover:bg-gray-50"}`}>
+                    <input type="radio" name="format" value="single" checked={tournamentFormat === "single"} onChange={() => handleFormatChange("single")} className="hidden" />
+                    Único
+                  </label>
+                  <div className="w-px bg-gray-200" />
+                  <label className={`flex-1 flex items-center justify-center cursor-pointer text-xs font-semibold transition-colors ${tournamentFormat === "groups" ? "bg-pink-500 text-white" : "text-gray-500 hover:bg-gray-50"}`}>
+                    <input type="radio" name="format" value="groups" checked={tournamentFormat === "groups"} onChange={() => handleFormatChange("groups")} className="hidden" />
+                    Grupos
+                  </label>
+                </div>
+              </div>
+
+              {/* Nº casais */}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Nº Casais</label>
+                <select
+                  className="border border-gray-200 bg-white px-2 py-1.5 rounded-lg w-full focus:ring-2 focus:ring-pink-400 outline-none h-9 cursor-pointer text-sm shadow-sm"
+                  value={n}
+                  onChange={(e) => handleCoupleCountChange(Number(e.target.value))}
+                >
+                  {Array.from({ length: 13 }, (_, i) => i + 4).map((x) => (
+                    <option key={x} value={x}>{x}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Quadras */}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Quadras</label>
+                <input
+                  type="number" min="1" max="6"
+                  className="border border-gray-200 bg-white px-2 py-1.5 rounded-lg w-full focus:ring-2 focus:ring-pink-400 outline-none h-9 text-sm shadow-sm"
+                  value={numCourts}
+                  onChange={(e) => setNumCourts(Number(e.target.value) || 1)}
+                />
+              </div>
+
+              {/* Formato partidas */}
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Partida</label>
+                <select
+                  className="border border-gray-200 bg-white px-2 py-1.5 rounded-lg w-full focus:ring-2 focus:ring-pink-400 outline-none h-9 cursor-pointer text-sm shadow-sm"
+                  value={durationType}
+                  onChange={(e) => setDurationType(e.target.value as any)}
+                >
+                  <option value="set6">Set 6 (40min)</option>
+                  <option value="shortset">Short Set (25min)</option>
+                  <option value="supertie">Super Tie (10min)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Estimativa + botão gerar na mesma linha */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-200">
+              <div className="flex items-center gap-3">
+                <span className="text-lg">⏱️</span>
+                <div>
+                  <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Estimativa: </span>
+                  <span className="text-sm font-medium text-gray-700">
+                    {durationEstimate.totalMatches} partidas em {durationEstimate.courts} quadra(s)
+                  </span>
+                </div>
+                <span className="text-lg font-black text-[#FB0395]">
+                  {durationEstimate.hours}h {durationEstimate.minutes}min
+                </span>
+                <span className="hidden sm:inline text-xs text-gray-400">
+                  {(() => {
+                    const { matchesPerMan, matchesPerWoman } = getMatchesPerPlayer();
+                    const maxMan = Math.max(...matchesPerMan);
+                    const maxWoman = Math.max(...matchesPerWoman);
+                    const minMan = Math.min(...matchesPerMan);
+                    const minWoman = Math.min(...matchesPerWoman);
+                    if (maxMan === minMan && maxWoman === minWoman) return `${maxMan} partidas/jogador`;
+                    return `H: ${minMan}-${maxMan} | M: ${minWoman}-${maxWoman}`;
+                  })()}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={shuffleBeforeGenerating}
+                    onChange={(e) => setShuffleBeforeGenerating(e.target.checked)}
+                    className="w-4 h-4 text-pink-500 rounded focus:ring-pink-400 cursor-pointer"
+                  />
+                  Sorteio Aleatório
+                </label>
+                <button
+                  className="px-5 py-1.5 rounded-lg font-bold text-gray-900 text-sm h-9 flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 shadow-sm shrink-0"
+                  style={{ backgroundColor: "#00F1FD" }}
+                  onClick={handleGenerate}
+                >
+                  ⚙️ Gerar Cronograma
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block mb-2">Formato das Partidas:</label>
-              <select
-                className="border px-2 py-1 rounded w-full"
-                value={durationType}
-                onChange={(e) => setDurationType(e.target.value as any)}
-              >
-                <option value="set6">Set 6 games (40 min)</option>
-                <option value="shortset">Short Set (25 min)</option>
-                <option value="supertie">Super Tie (10 min)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block mb-2">Número de Quadras:</label>
-              <input
-                type="number"
-                min="1"
-                max="6"
-                className="border px-2 py-1 rounded w-full"
-                value={numCourts}
-                onChange={(e) => setNumCourts(Number(e.target.value) || 1)}
-              />
-            </div>
-            <div>
-              <button
-                className="mt-6 px-3 py-1 rounded transition w-full font-bold"
-                style={{ backgroundColor: "#00F1FD", color: "black" }}
-                onClick={handleGenerate}
-              >
-                Gerar Cronograma
-              </button>
-            </div>
-          </div>
-
-          <div
-            className="mt-4 p-3 rounded"
-            style={{ backgroundColor: "#00F1FD20" }}
-          >
-            <strong>
-              ⏱️ Estimativa de Duração ({durationEstimate.courts} quadra(s)):
-            </strong>
-            <br />
-            {durationEstimate.totalMatches} partidas × {durationEstimate.label}
-            <br />
-            <strong>Tempo total estimado:</strong> {durationEstimate.hours}h
-            {durationEstimate.minutes}min
-            <br />
-            <small>
-              <strong>Partidas por jogador:</strong>
-              {(() => {
-                const { matchesPerMan, matchesPerWoman } =
-                  getMatchesPerPlayer();
-                const maxMan = Math.max(...matchesPerMan);
-                const maxWoman = Math.max(...matchesPerWoman);
-                const minMan = Math.min(...matchesPerMan);
-                const minWoman = Math.min(...matchesPerWoman);
-                if (maxMan === minMan && maxWoman === minWoman) {
-                  return `${maxMan} partidas (todos os jogadores)`;
-                } else {
-                  return `Homens: ${minMan}–${maxMan} | Mulheres: ${minWoman}–${maxWoman}`;
-                }
-              })()}
-            </small>
-          </div>
-
-          {/* TOGGLE DE MODO */}
-          <div className="mt-4 flex justify-center gap-4 flex-wrap">
+          {/* ── Rodapé: botões de modo ── */}
+          <div className="bg-white border-t border-gray-100 px-4 py-2 flex gap-2 justify-center sm:justify-start">
             <button
-              className={`px-4 py-2 rounded font-bold transition ${viewMode === "planning"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-200"
-                }`}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === "planning"
+                  ? "bg-blue-600 text-white shadow-sm shadow-blue-200"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
               onClick={() => setViewMode("planning")}
             >
-              📋 Modo Planejamento
+              📋 Planejamento
             </button>
             <button
-              className={`px-4 py-2 rounded font-bold transition ${viewMode === "operation"
-                ? "bg-green-500 text-white"
-                : "bg-gray-200"
-                }`}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed ${
+                viewMode === "operation"
+                  ? "bg-green-600 text-white shadow-sm shadow-green-200"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
               onClick={handleStartOperationMode}
               disabled={roundsGroupA.length === 0}
             >
-              🎾 Modo Operação
+              🎾 Operação
             </button>
             <button
-              className={`px-4 py-2 rounded font-bold transition ${viewMode === "presentation"
-                ? "bg-purple-500 text-white"
-                : "bg-gray-200"
-                }`}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === "presentation"
+                  ? "bg-purple-600 text-white shadow-sm shadow-purple-200"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
               onClick={() => setViewMode("presentation")}
             >
-              🖥️ Modo Apresentação
+              🖥️ Apresentação
             </button>
           </div>
         </div>
@@ -2320,11 +2349,12 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
                         max="20"
                         className="w-16 border px-2 py-1 rounded bg-white"
                         placeholder="A"
-                        value={
+                        key={`A_${match.globalId}_${matchResults[`${prefix}${match.globalId}`]?.scoreA}`}
+                        defaultValue={
                           matchResults[`${prefix}${match.globalId}`]?.scoreA ??
                           ""
                         }
-                        onChange={(e) =>
+                        onBlur={(e) =>
                           handleScoreChange(
                             match,
                             "scoreA",
@@ -2340,11 +2370,12 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
                         max="20"
                         className="w-16 border px-2 py-1 rounded bg-white"
                         placeholder="B"
-                        value={
+                        key={`B_${match.globalId}_${matchResults[`${prefix}${match.globalId}`]?.scoreB}`}
+                        defaultValue={
                           matchResults[`${prefix}${match.globalId}`]?.scoreB ??
                           ""
                         }
-                        onChange={(e) =>
+                        onBlur={(e) =>
                           handleScoreChange(
                             match,
                             "scoreB",
@@ -2670,8 +2701,9 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
                       max="20"
                       className="w-16 border px-2 py-1 rounded bg-white"
                       placeholder="A"
-                      value={matchResults[`A_${m.globalId}`]?.scoreA ?? ""}
-                      onChange={(e) =>
+                      key={`Planning_A_${m.globalId}_${matchResults[`A_${m.globalId}`]?.scoreA}`}
+                      defaultValue={matchResults[`A_${m.globalId}`]?.scoreA ?? ""}
+                      onBlur={(e) =>
                         handleScoreChange(m, "scoreA", e.target.value, "A_")
                       }
                     />
@@ -2682,8 +2714,9 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
                       max="20"
                       className="w-16 border px-2 py-1 rounded bg-white"
                       placeholder="B"
-                      value={matchResults[`A_${m.globalId}`]?.scoreB ?? ""}
-                      onChange={(e) =>
+                      key={`Planning_B_${m.globalId}_${matchResults[`A_${m.globalId}`]?.scoreB}`}
+                      defaultValue={matchResults[`A_${m.globalId}`]?.scoreB ?? ""}
+                      onBlur={(e) =>
                         handleScoreChange(m, "scoreB", e.target.value, "A_")
                       }
                       disabled={!m.teamB}
@@ -2776,8 +2809,9 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
                           max="20"
                           className="w-16 border px-2 py-1 rounded bg-white"
                           placeholder="A"
-                          value={matchResults[`B_${m.globalId}`]?.scoreA ?? ""}
-                          onChange={(e) =>
+                          key={`Planning_GrpB_A_${m.globalId}_${matchResults[`B_${m.globalId}`]?.scoreA}`}
+                          defaultValue={matchResults[`B_${m.globalId}`]?.scoreA ?? ""}
+                          onBlur={(e) =>
                             handleScoreChange(m, "scoreA", e.target.value, "B_")
                           }
                         />
@@ -2788,8 +2822,9 @@ export default function MixedDoublesScheduler({ storagePrefix = "wallbt_md" }: {
                           max="20"
                           className="w-16 border px-2 py-1 rounded bg-white"
                           placeholder="B"
-                          value={matchResults[`B_${m.globalId}`]?.scoreB ?? ""}
-                          onChange={(e) =>
+                          key={`Planning_GrpB_B_${m.globalId}_${matchResults[`B_${m.globalId}`]?.scoreB}`}
+                          defaultValue={matchResults[`B_${m.globalId}`]?.scoreB ?? ""}
+                          onBlur={(e) =>
                             handleScoreChange(m, "scoreB", e.target.value, "B_")
                           }
                           disabled={!m.teamB}

@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTournamentData } from "../../hooks/useTournamentData";
-import type { TournamentData } from "../../hooks/useTournamentData";
 import { calculateTournamentStats, formatRemainingTime } from "../../utils/statsUtils";
 import type { TournamentStats } from "../../utils/statsUtils";
 import type { TournamentConfig } from "../../types/tournament";

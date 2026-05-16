@@ -554,8 +554,7 @@ export default function KingQueenDashboard({ config, players }: KingQueenDashboa
                   <div key={rnd.round} className="mb-4 last:mb-0">
                     <div className="text-xs text-muted font-bold mb-2 uppercase tracking-widest">Rodada {rnd.round}</div>
                     {rnd.matches.map(m => {
-                      const res = data.matchResults[m.globalId];
-                      const { text: scoreText, winner } = formatMatchScore(res?.scoreA, res?.scoreB);
+                      const { text: scoreText, winner } = formatMatchScore(data.matchResults[m.globalId]?.scoreA, data.matchResults[m.globalId]?.scoreB);
                       return (
                         <div 
                           key={m.globalId} 
@@ -611,13 +610,8 @@ export default function KingQueenDashboard({ config, players }: KingQueenDashboa
                       ))}
                     </div>
 
-                    {rounds.map(rnd => (
-                      <div key={rnd.round} className="mb-4 last:mb-0">
-                        <div className="text-xs text-muted font-bold mb-2 uppercase tracking-widest">Rodada {rnd.round}</div>
-                        {rnd.matches.map(m => {
-                          const res = data.matchResults[m.globalId];
-                          return (
-                            <div 
+                      return (
+                        <div 
                               key={m.globalId} 
                               onClick={() => setEditingMatchId(m.globalId)}
                               className="flex flex-col p-3 bg-black/40 rounded-xl border border-white/10 shadow-lg relative overflow-hidden mb-2 cursor-pointer hover:border-brand-cyan/50 transition-all group"
